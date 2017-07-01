@@ -35,6 +35,7 @@ public class ReuseView : MonoBehaviour
 			return; 
 		}
 
+		_itemPrefab.gameObject.SetActive(false); // TODO
 		for (int i = 0, count = _vos.Length; i < count; i++)
 		{
 			var item = GameObject.Instantiate(_itemPrefab); // 此处实例化是错的，如果有1000个，岂不是要真的实例化1000个，不切实际？
@@ -49,62 +50,67 @@ public class ReuseView : MonoBehaviour
 		_itemPrefab.Clear(); 
 		// 如果处于未激活状态，是否可以用rect来获取高度？
 		_itemPrefab.gameObject.SetActive(true); // 为了后面获取itemPrefab的高度，必须激活
-
 		SetWait(() =>
 			{
-				// 少数隐藏
-				// anchor, index
-				// 只刷数据不能保持在当前index，有的数据可能减少了，也许当前index已经没有item了
-				// 不能把所有的都实例化出来一次
-
-				// --BUG--
-				// 快速拉动，有时候有的不显示
-				// 画面闪动
 
 				_minItemHeight = (_itemPrefab.transform as RectTransform).sizeDelta.y; 
 				Debug.Log("_minItemHeight: " + _minItemHeight); 
-				_parentAnchorPoses = new float[_vos.Length]; 
-				for (int i = 0, count = _parentAnchorPoses.Length; i < count; i++)
-				{	
-					// TODO 这里写法有问题
-					CalcItemEdge(i, true); 
-					_parentAnchorPoses[i] = _topItemEdgePos; 
-					Debug.LogFormat("_parentAnchorPoses[{0}]: {1}", i, _parentAnchorPoses[i]); 
-				}
-				_contentRtf.sizeDelta = _parentRtf.sizeDelta; // 先把所有的实例化了，获取content的高度
+				_itemPrefab.gameObject.SetActive(false);
 
-				// 已经获取到了数据，清除无用数据
-				_itemPrefab.gameObject.SetActive(false); 
-				for (int i = 0, count = _items.Count; i < count; i++)
-				{
-					var item = _items[i]; 
-					item.Clear(); 
-					GameObject.Destroy(item.gameObject); 
-				}
-				_items.Clear(); 
+				SetWait(() =>
+					{
+						// 少数隐藏
+						// anchor, index
+						// 只刷数据不能保持在当前index，有的数据可能减少了，也许当前index已经没有item了
+						// 不能把所有的都实例化出来一次
 
-				// 创建新的items
-				int prefabsCount = Mathf.CeilToInt(_viewPortRtf.rect.height / _minItemHeight) + 1; // 屏幕所能显示的最大数量
-				Debug.Log("prefabsCount: " + prefabsCount + ", sizeDelta: " + _viewPortRtf.rect); 
-				prefabsCount = prefabsCount < _vos.Length ? prefabsCount : _vos.Length; 
-				for (int i = 0; i < prefabsCount; i++)
-				{
-					var item = GameObject.Instantiate(_itemPrefab); 
-					item.gameObject.SetActive(true); 
-					item.transform.SetParent(_parentRtf); 
-					item.transform.localScale = Vector3.one; 
-					item.vo = _vos[curIndex + i]; 
-					item.Set(); 
-					_items.Add(item); 
-				}
+						// --BUG--
+						// 快速拉动，有时候有的不显示
+						// 画面闪动
 
-				//		Invoke("CalcEdgePos", Time.maximumDeltaTime); 
-				SetWait(CalcEdgePos); 
-//				SetWait(Recalc); 
+//						_parentAnchorPoses = new float[_vos.Length]; 
+//						for (int i = 0, count = _parentAnchorPoses.Length; i < count; i++)
+//						{	
+//							// TODO 这里写法有问题
+//							CalcItemEdge(i, true); 
+//							_parentAnchorPoses[i] = _topItemEdgePos; 
+//							Debug.LogFormat("_parentAnchorPoses[{0}]: {1}", i, _parentAnchorPoses[i]); 
+//						}
+						_contentRtf.sizeDelta = _parentRtf.sizeDelta; // 先把所有的实例化了，获取content的高度
+
+						// 已经获取到了数据，清除无用数据
+//						_itemPrefab.gameObject.SetActive(false); 
+						for (int i = 0, count = _items.Count; i < count; i++)
+						{
+							var item = _items[i]; 
+							item.Clear(); 
+							GameObject.Destroy(item.gameObject); 
+						}
+						_items.Clear(); 
+
+						// 创建新的items
+						int prefabsCount = Mathf.CeilToInt(_viewPortRtf.rect.height / _minItemHeight) + 1; // 屏幕所能显示的最大数量
+						Debug.Log("prefabsCount: " + prefabsCount + ", sizeDelta: " + _viewPortRtf.rect); 
+						prefabsCount = prefabsCount < _vos.Length ? prefabsCount : _vos.Length; 
+						for (int i = 0; i < prefabsCount; i++)
+						{
+							var item = GameObject.Instantiate(_itemPrefab); 
+							item.gameObject.SetActive(true); 
+							item.transform.SetParent(_parentRtf); 
+							item.transform.localScale = Vector3.one; 
+							item.vo = _vos[curIndex + i]; 
+							item.Set(); 
+							_items.Add(item); 
+						}
+
+						//		Invoke("CalcEdgePos", Time.maximumDeltaTime); 
+						SetWait(CalcEdgePos); 
+						//				SetWait(Recalc); 
+					}); 
 			}); 
 	}
 
-	float[] _parentAnchorPoses;
+//	float[] _parentAnchorPoses;
 
 	public void Clear()
 	{
@@ -262,18 +268,18 @@ public class ReuseView : MonoBehaviour
 		int yBottom = (int)((-(1 - value.y) * _contentPosRange) - _viewPortRtf.rect.height); // viewPort下边缘对应的content的localPos
 		Debug.Log("yBottom: " + yBottom); 
 
-		float minGap = 0 - _parentAnchorPoses[_parentAnchorPoses.Length - 1]; // TODO 没有开堆不允许进入这里
-		for (int i = 0, count = _parentAnchorPoses.Length; i < count; i++)
-		{
-			float gap = _parentAnchorPoses[i] - curYPos; // 只能算比contentRtf的上边缘点y坐标大的点
-			if (gap >= 0 && gap < minGap)
-			{
-				minGap = gap; 
-				curIndex = i; 
-			} 
-		}
-		Debug.LogWarning("curYPos: " + curYPos); 
-		Debug.LogWarning("curIndex after for loop: " + curIndex); 
+//		float minGap = 0 - _parentAnchorPoses[_parentAnchorPoses.Length - 1]; // TODO 没有开堆不允许进入这里
+//		for (int i = 0, count = _parentAnchorPoses.Length; i < count; i++)
+//		{
+//			float gap = _parentAnchorPoses[i] - curYPos; // 只能算比contentRtf的上边缘点y坐标大的点
+//			if (gap >= 0 && gap < minGap)
+//			{
+//				minGap = gap; 
+//				curIndex = i; 
+//			} 
+//		}
+//		Debug.LogWarning("curYPos: " + curYPos); 
+//		Debug.LogWarning("curIndex after for loop: " + curIndex); 
 		if (yBottom <= (int)_bottomItemEdgePos)
 		{
 			if (curIndex + 1 > _vos.Length - _items.Count)
