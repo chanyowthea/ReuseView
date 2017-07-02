@@ -7,6 +7,8 @@ using System;
 // --使用说明--
 // 1 都要向左上角对齐
 
+// BUG
+// 不要实例化
 
 public class ReuseView : MonoBehaviour
 {
@@ -59,23 +61,24 @@ public class ReuseView : MonoBehaviour
 
 				SetWait(() =>
 					{
-						// 少数隐藏
-						// anchor, index
-						// 只刷数据不能保持在当前index，有的数据可能减少了，也许当前index已经没有item了
-						// 不能把所有的都实例化出来一次
-
-						// --BUG--
-						// 快速拉动，有时候有的不显示
-						// 画面闪动
-
-//						_parentAnchorPoses = new float[_vos.Length]; 
-//						for (int i = 0, count = _parentAnchorPoses.Length; i < count; i++)
-//						{	
-//							// TODO 这里写法有问题
-//							CalcItemEdge(i, true); 
-//							_parentAnchorPoses[i] = _topItemEdgePos; 
-//							Debug.LogFormat("_parentAnchorPoses[{0}]: {1}", i, _parentAnchorPoses[i]); 
-//						}
+						int prefabsCount = Mathf.CeilToInt(_viewPortRtf.rect.height / _minItemHeight) + 1; // 屏幕所能显示的最大数量
+						Debug.Log("prefabsCount: " + prefabsCount + ", sizeDelta: " + _viewPortRtf.rect); 
+						bool isLess = prefabsCount < _vos.Length; 
+						prefabsCount = isLess ? prefabsCount : _vos.Length; 
+						int len = isLess ? (_vos.Length - prefabsCount + 1) : 0; // parent的anchorPos只可能在这个范围内变动
+						_parentAnchorPoses = new float[len]; 
+						_parentBottomPoses = new float[len]; 
+						Debug.LogWarning("len: " + len); 
+						for (int i = 0, count = _parentAnchorPoses.Length; i < count; i++)
+						{	
+							// TODO 这里写法有问题
+							CalcItemEdge(i, true); 
+							CalcItemEdge(i + prefabsCount - 1, false); // 由于现在item的个数还是等于vos.Length，因此可以使用这个
+							_parentAnchorPoses[i] = _topItemEdgePos; 
+							_parentBottomPoses[i] = _bottomItemEdgePos; 
+							Debug.LogFormat("_parentAnchorPoses[{0}]: {1}", i, _parentAnchorPoses[i]); 
+							Debug.LogFormat("_parentBottomPoses[{0}]: {1}", i, _parentBottomPoses[i]); 
+						}
 						_contentRtf.sizeDelta = _parentRtf.sizeDelta; // 先把所有的实例化了，获取content的高度
 
 						// 已经获取到了数据，清除无用数据
@@ -89,28 +92,24 @@ public class ReuseView : MonoBehaviour
 						_items.Clear(); 
 
 						// 创建新的items
-						int prefabsCount = Mathf.CeilToInt(_viewPortRtf.rect.height / _minItemHeight) + 1; // 屏幕所能显示的最大数量
-						Debug.Log("prefabsCount: " + prefabsCount + ", sizeDelta: " + _viewPortRtf.rect); 
-						prefabsCount = prefabsCount < _vos.Length ? prefabsCount : _vos.Length; 
 						for (int i = 0; i < prefabsCount; i++)
 						{
 							var item = GameObject.Instantiate(_itemPrefab); 
 							item.gameObject.SetActive(true); 
 							item.transform.SetParent(_parentRtf); 
 							item.transform.localScale = Vector3.one; 
-							item.vo = _vos[curIndex + i]; 
+							item.vo = _vos[_curIndex + i]; 
 							item.Set(); 
 							_items.Add(item); 
 						}
 
-						//		Invoke("CalcEdgePos", Time.maximumDeltaTime); 
 						SetWait(CalcEdgePos); 
-						//				SetWait(Recalc); 
 					}); 
 			}); 
 	}
 
-//	float[] _parentAnchorPoses;
+	float[] _parentAnchorPoses;
+	float[] _parentBottomPoses;
 
 	public void Clear()
 	{
@@ -138,7 +137,6 @@ public class ReuseView : MonoBehaviour
 
 	void SetWait(Action a)
 	{
-//		ClearWaitRoutine(); 
 		var r = WaitRoutine(a); 
 		StartCoroutine(r); 
 		waitRoutines.Enqueue(r); 
@@ -160,7 +158,6 @@ public class ReuseView : MonoBehaviour
 			a(); 
 			a = null; 
 		}
-//		Invoke("Recalc", Time.deltaTime); 
 		ClearWaitRoutine(); 
 	}
 
@@ -187,18 +184,18 @@ public class ReuseView : MonoBehaviour
 	#region Edge
 
 	float _topItemEdgePos;
-	float _secondTopItemEdgePos;
+	//	float _secondTopItemEdgePos;
 	float _bottomItemEdgePos;
-	float _secondBottomItemEdgePos;
-	int curIndex;
+	//	float _secondBottomItemEdgePos;
+	int _curIndex;
 
 	void ClearEdge()
 	{
-		curIndex = 0; 
+		_curIndex = 0; 
 		_topItemEdgePos = 0; 
-		_secondTopItemEdgePos = 0; 
+//		_secondTopItemEdgePos = 0; 
 		_bottomItemEdgePos = 0; 
-		_secondBottomItemEdgePos = 0; 
+//		_secondBottomItemEdgePos = 0; 
 	}
 
 	void CalcEdgePos()
@@ -224,27 +221,24 @@ public class ReuseView : MonoBehaviour
 		if (isTop)
 		{
 			_topItemEdgePos = pos2.y; 
-			_secondTopItemEdgePos = _topItemEdgePos - (layoutGroup.spacing + (item.transform as RectTransform).rect.height); 
-			Debug.Log("_topItemEdgePos: " + _topItemEdgePos + ", _secondTopItemEdgePos: " + _secondTopItemEdgePos); 
 		}
 		else
 		{
 			_bottomItemEdgePos = pos2.y; 
-			_secondBottomItemEdgePos = _bottomItemEdgePos + (layoutGroup.spacing + (item.transform as RectTransform).rect.height); 
-			Debug.Log("_bottomItemEdgePos: " + _bottomItemEdgePos + ", _secondBottomItemEdgePos: " + _secondBottomItemEdgePos);
 		}
 	}
 
 	#endregion
 
 	#region Hide
-
+	[NonSerialized] public float targetPos = 1; 
 	[SerializeField] ScrollRect scrollRect;
 
 	void SetHide()
 	{
 		scrollRect.onValueChanged.RemoveAllListeners(); 
 		scrollRect.onValueChanged.AddListener(OnChangeValue); 
+		scrollRect.normalizedPosition = Vector2.up * targetPos; 
 	}
 
 	void ClearHide()
@@ -254,103 +248,86 @@ public class ReuseView : MonoBehaviour
 	}
 
 
-	float _contentPosRange; 
+	float _contentPosRange;
+
 	public void OnChangeValue(Vector2 value)
 	{
 		if (value.y < 0 || value.y > 1)
 		{
 			return; 
 		}
+		if (_parentAnchorPoses == null || _parentAnchorPoses.Length == 0)
+		{
+			return; 
+		}
+
+		// 如果value的值在接近边缘的地方，parent没有往上
 
 		_contentPosRange = _contentRtf.rect.height - _viewPortRtf.rect.height; // TODO 要在之前算好，不能在这里算
-		int yTop = (int)(-(1 - value.y) * _contentPosRange); // viewPort上边缘对应的content的localPos
-		float curYPos = -(1 - value.y) * _contentPosRange;  
-		int yBottom = (int)((-(1 - value.y) * _contentPosRange) - _viewPortRtf.rect.height); // viewPort下边缘对应的content的localPos
+		float yTop = (int)(-(1 - value.y) * _contentPosRange); // viewPort上边缘对应的content的localPos
+		Debug.LogWarning("yTop: " + yTop); 
+		float yBottom = (int)((-(1 - value.y) * _contentPosRange) - _viewPortRtf.rect.height); // viewPort下边缘对应的content的localPos
 		Debug.Log("yBottom: " + yBottom); 
 
-//		float minGap = 0 - _parentAnchorPoses[_parentAnchorPoses.Length - 1]; // TODO 没有开堆不允许进入这里
-//		for (int i = 0, count = _parentAnchorPoses.Length; i < count; i++)
-//		{
-//			float gap = _parentAnchorPoses[i] - curYPos; // 只能算比contentRtf的上边缘点y坐标大的点
-//			if (gap >= 0 && gap < minGap)
-//			{
-//				minGap = gap; 
-//				curIndex = i; 
-//			} 
-//		}
-//		Debug.LogWarning("curYPos: " + curYPos); 
-//		Debug.LogWarning("curIndex after for loop: " + curIndex); 
-		if (yBottom <= (int)_bottomItemEdgePos)
-		{
-			if (curIndex + 1 > _vos.Length - _items.Count)
+		// 计算parent的anchorPos
+		float minGap = 0 - _parentAnchorPoses[_parentAnchorPoses.Length - 1]; // TODO 没有开堆不允许进入这里
+		int index = -1; 
+		if (yTop >= _topItemEdgePos) // 如果滑动后，顶部超过parent的顶部，那么向上移动parent
+		{	
+			for (int i = 0, count = _parentAnchorPoses.Length; i < count; i++)
 			{
-				return; 
-			}
-			Debug.LogError("Move down"); 
-			++curIndex; 
-			Debug.LogWarning("curIndex: " + curIndex); 
-			float lastParentBottomPos = _parentRtf.transform.localPosition.y + (_parentRtf.transform as RectTransform).rect.yMin; 
-			Debug.LogError("lastParentBottomPos: " + lastParentBottomPos); 
-
-			for (int i = 0, count = _items.Count; i < count; i++)
-			{
-				var item = _items[i]; 
-				item.Clear(); 
-				item.vo = _vos[curIndex + i]; 
-				item.Set(); 
-			}
-
-			SetWait(() =>
+				float gap = _parentAnchorPoses[i] - yTop; // 只能算比contentRtf的上边缘y坐标大的点
+				if (gap >= 0 && gap < minGap)
 				{
-					Debug.LogWarning("height: " + _parentRtf.rect.height); 
-					_parentRtf.anchoredPosition = new Vector2(0, lastParentBottomPos + _parentRtf.rect.height); 
-					CalcItemEdge(0, true); 
-					CalcItemEdge(_items.Count - 1, false); 
-					float moveDelta = _secondBottomItemEdgePos - _bottomItemEdgePos;
-					Debug.LogError("delta: " + moveDelta); 
-					_parentRtf.anchoredPosition -= Vector2.up * moveDelta; 
-					_secondBottomItemEdgePos -= moveDelta; 
-					_bottomItemEdgePos -= moveDelta; 
-
-					_secondTopItemEdgePos -= moveDelta; 
-					_topItemEdgePos -= moveDelta; 
-					Debug.LogError("_bottomItemEdgePos: " + _bottomItemEdgePos + ", _secondBottomItemEdgePos: " + _secondBottomItemEdgePos); 
-					Debug.LogError("_topItemEdgePos: " + _topItemEdgePos + ", _secondTopItemEdgePos: " + _secondTopItemEdgePos); 
-				}); 
+					minGap = gap; 
+					index = i; 
+				} 
+			}
+			if ((int)(yTop) == 0)
+			{
+				index = 0; 
+			}
 		}
-		if (yTop >= (int)_topItemEdgePos)
+		else if (yBottom <= _bottomItemEdgePos) // 如果滑动后，底部超过parent的底部，那么向下移动parent
 		{
-			if (curIndex - 1 < 0)
+			for (int i = 0, count = _parentAnchorPoses.Length; i < count; i++)
 			{
-				return; 
-			}
-			Debug.LogError("Move up"); 
-			--curIndex; 
-			Debug.LogWarning("curIndex: " + curIndex); 
-			for (int i = 0, count = _items.Count; i < count; i++)
-			{
-				var item = _items[i]; 
-				item.Clear(); 
-				item.vo = _vos[curIndex + i]; 
-				item.Set(); 
-			}
-			SetWait(() =>
+				float gap = yBottom - _parentBottomPoses[i]; // 只能算比contentRtf的下边缘y坐标小的点
+				if (gap >= 0 && gap < minGap)
 				{
-					Debug.LogWarning("height: " + _parentRtf.rect.height); 
-					CalcItemEdge(0, true); 
-					CalcItemEdge(_items.Count - 1, false); 
-					float moveDelta = _topItemEdgePos - _secondTopItemEdgePos;
-					Debug.LogError("delta: " + moveDelta); 
-					_parentRtf.anchoredPosition += Vector2.up * moveDelta; 
-					_secondTopItemEdgePos += moveDelta; 
-					_topItemEdgePos += moveDelta; 
-
-					_secondBottomItemEdgePos += moveDelta; 
-					_bottomItemEdgePos += moveDelta; 
-					Debug.LogError("_bottomItemEdgePos: " + _bottomItemEdgePos + ", _secondBottomItemEdgePos: " + _secondBottomItemEdgePos); 
-					Debug.LogError("_topItemEdgePos: " + _topItemEdgePos + ", _secondTopItemEdgePos: " + _secondTopItemEdgePos); 
-				}); 
+					minGap = gap; 
+					index = i; 
+				} 
+			}
 		}
+		else
+		{
+			// 滑动后没有超过范围就不用变化parent的位置
+		}
+		Debug.LogError("index: " + index); 
+		if (index < 0 || index >= _parentAnchorPoses.Length)
+		{
+			Debug.LogError("index out of range: " + index); 
+			return; 
+		}
+		if (_curIndex == index)
+		{
+			return; 
+		}
+		_curIndex = index; 
+		Debug.LogError("_curIndex: " + _curIndex); 
+		_bottomItemEdgePos = _parentBottomPoses[index]; 
+		_topItemEdgePos = _parentAnchorPoses[index]; 
+
+		for (int i = 0, count = _items.Count; i < count; i++)
+		{
+			var item = _items[i]; 
+			item.Clear(); 
+			item.vo = _vos[_curIndex + i]; 
+			item.Set(); 
+		}
+		_parentRtf.anchoredPosition = new Vector2(0, _parentAnchorPoses[index]); 
+		// 目前只关心用unity跳转过来的，不是在代码里面跳转
 	}
 
 	#endregion
