@@ -7,9 +7,6 @@ using System;
 // --使用说明--
 // 1 都要向左上角对齐
 
-// BUG
-// 不要实例化
-
 public class ReuseView : MonoBehaviour
 {
 	#region Main
@@ -29,6 +26,8 @@ public class ReuseView : MonoBehaviour
 
 	#endregion
 
+	float[] itemHeights; 
+
 	public void Set()
 	{
 		if (_vos == null || _vos.Length == 0)
@@ -37,29 +36,33 @@ public class ReuseView : MonoBehaviour
 			return; 
 		}
 
-		_itemPrefab.gameObject.SetActive(false); // TODO
-		for (int i = 0, count = _vos.Length; i < count; i++)
-		{
-			var item = GameObject.Instantiate(_itemPrefab); // 此处实例化是错的，如果有1000个，岂不是要真的实例化1000个，不切实际？
-			item.gameObject.SetActive(true); 
-			item.transform.SetParent(_parentRtf); 
-			item.transform.localScale = Vector3.one; 
-			item.vo = _vos[i]; 
-			item.Set(); 
-			_items.Add(item); 
-		}
-
 		_itemPrefab.Clear(); 
 		// 如果处于未激活状态，是否可以用rect来获取高度？
 		_itemPrefab.gameObject.SetActive(true); // 为了后面获取itemPrefab的高度，必须激活
 		SetWait(() =>
 			{
-
 				_minItemHeight = (_itemPrefab.transform as RectTransform).sizeDelta.y; 
 				Debug.Log("_minItemHeight: " + _minItemHeight); 
+
+				float parentHeight = 0; 
+				float heightWithoutText = _minItemHeight - _itemPrefab.GetTextHeight(); 
+				itemHeights = new float[_vos.Length]; 
+				for (int i = 0, count = _vos.Length; i < count; i++)
+				{
+					_itemPrefab.vo = _vos[i]; 
+					_itemPrefab.Set();
+					float height = heightWithoutText + _itemPrefab.GetTextHeight(); 
+					parentHeight += height + layoutGroup.spacing; 
+					itemHeights[i] = height; 
+					_itemPrefab.Clear(); 
+				}
+				parentHeight -= layoutGroup.spacing; 
+				Debug.Log("parentHeight: " + parentHeight); 
+				_contentRtf.sizeDelta = new Vector2(_parentRtf.sizeDelta.x, parentHeight); 
+
 				_itemPrefab.gameObject.SetActive(false);
 
-				SetWait(() =>
+				SetWait(() => // 也许这里不必SetWait
 					{
 						int prefabsCount = Mathf.CeilToInt(_viewPortRtf.rect.height / _minItemHeight) + 1; // 屏幕所能显示的最大数量
 						Debug.Log("prefabsCount: " + prefabsCount + ", sizeDelta: " + _viewPortRtf.rect); 
@@ -69,28 +72,29 @@ public class ReuseView : MonoBehaviour
 						_parentAnchorPoses = new float[len]; 
 						_parentBottomPoses = new float[len]; 
 						Debug.LogWarning("len: " + len); 
+						_topItemEdgePos = 0; 
+						_bottomItemEdgePos = 0; 
+						for (int j = 0; j < prefabsCount; j++) 
+						{
+							_bottomItemEdgePos -= itemHeights[j] + layoutGroup.spacing;
+						}
+						_bottomItemEdgePos += layoutGroup.spacing; 
+
 						for (int i = 0, count = _parentAnchorPoses.Length; i < count; i++)
 						{	
-							// TODO 这里写法有问题
-							CalcItemEdge(i, true); 
-							CalcItemEdge(i + prefabsCount - 1, false); // 由于现在item的个数还是等于vos.Length，因此可以使用这个
 							_parentAnchorPoses[i] = _topItemEdgePos; 
 							_parentBottomPoses[i] = _bottomItemEdgePos; 
 							Debug.LogFormat("_parentAnchorPoses[{0}]: {1}", i, _parentAnchorPoses[i]); 
 							Debug.LogFormat("_parentBottomPoses[{0}]: {1}", i, _parentBottomPoses[i]); 
-						}
-						_contentRtf.sizeDelta = _parentRtf.sizeDelta; // 先把所有的实例化了，获取content的高度
 
-						// 已经获取到了数据，清除无用数据
-//						_itemPrefab.gameObject.SetActive(false); 
-						for (int i = 0, count = _items.Count; i < count; i++)
-						{
-							var item = _items[i]; 
-							item.Clear(); 
-							GameObject.Destroy(item.gameObject); 
+							_topItemEdgePos -= itemHeights[i] + layoutGroup.spacing; 
+							if(i + prefabsCount >= itemHeights.Length)
+							{
+								break; 
+							}
+							_bottomItemEdgePos -= layoutGroup.spacing + itemHeights[i + prefabsCount]; 
 						}
-						_items.Clear(); 
-
+							
 						// 创建新的items
 						for (int i = 0; i < prefabsCount; i++)
 						{
@@ -184,48 +188,27 @@ public class ReuseView : MonoBehaviour
 	#region Edge
 
 	float _topItemEdgePos;
-	//	float _secondTopItemEdgePos;
 	float _bottomItemEdgePos;
-	//	float _secondBottomItemEdgePos;
 	int _curIndex;
 
 	void ClearEdge()
 	{
 		_curIndex = 0; 
 		_topItemEdgePos = 0; 
-//		_secondTopItemEdgePos = 0; 
 		_bottomItemEdgePos = 0; 
-//		_secondBottomItemEdgePos = 0; 
 	}
 
 	void CalcEdgePos()
 	{
-		CalcItemEdge(0, true); 
-		CalcItemEdge(_items.Count - 1, false); 
+		_topItemEdgePos = 0;
+		float height = 0; 
+		for (int i = 0, count = _items.Count; i < count; i++)
+		{
+			height -= itemHeights[i] + layoutGroup.spacing; 
+		}
+		height += layoutGroup.spacing; 
+		_bottomItemEdgePos = height; 
 		SetHide(); 
-	}
-
-	void CalcItemEdge(int index, bool isTop)
-	{
-		if (index < 0 || index > _items.Count - 1)
-		{
-			Debug.LogError("index out of range! "); 
-			return; 
-		}
-
-		var item = _items[index]; 
-		Vector3 pos = item.transform.position +
-		              new Vector3(0, isTop ? ((item.transform as RectTransform).rect.yMax) : ((item.transform as RectTransform).rect.yMin), 0); // 获取最上边缘的线位置
-		Vector2 pos2 = RectTransformUtility.WorldToScreenPoint(null, pos); 
-		RectTransformUtility.ScreenPointToLocalPointInRectangle(_contentRtf, pos2, null, out pos2); 
-		if (isTop)
-		{
-			_topItemEdgePos = pos2.y; 
-		}
-		else
-		{
-			_bottomItemEdgePos = pos2.y; 
-		}
 	}
 
 	#endregion
@@ -261,8 +244,6 @@ public class ReuseView : MonoBehaviour
 			return; 
 		}
 
-		// 如果value的值在接近边缘的地方，parent没有往上
-
 		_contentPosRange = _contentRtf.rect.height - _viewPortRtf.rect.height; // TODO 要在之前算好，不能在这里算
 		float yTop = (int)(-(1 - value.y) * _contentPosRange); // viewPort上边缘对应的content的localPos
 		Debug.LogWarning("yTop: " + yTop); 
@@ -270,16 +251,17 @@ public class ReuseView : MonoBehaviour
 		Debug.Log("yBottom: " + yBottom); 
 
 		// 计算parent的anchorPos
-		float minGap = 0 - _parentAnchorPoses[_parentAnchorPoses.Length - 1]; // TODO 没有开堆不允许进入这里
+		float minGapTop = 0 - _parentAnchorPoses[_parentAnchorPoses.Length - 1]; // TODO 没有开堆不允许进入这里
+		float minGapBottom = 0 - _parentBottomPoses[_parentBottomPoses.Length - 1]; // TODO 没有开堆不允许进入这里
 		int index = -1; 
 		if (yTop >= _topItemEdgePos) // 如果滑动后，顶部超过parent的顶部，那么向上移动parent
 		{	
 			for (int i = 0, count = _parentAnchorPoses.Length; i < count; i++)
 			{
 				float gap = _parentAnchorPoses[i] - yTop; // 只能算比contentRtf的上边缘y坐标大的点
-				if (gap >= 0 && gap < minGap)
+				if (gap >= 0 && gap < minGapTop)
 				{
-					minGap = gap; 
+					minGapTop = gap; 
 					index = i; 
 				} 
 			}
@@ -293,9 +275,9 @@ public class ReuseView : MonoBehaviour
 			for (int i = 0, count = _parentAnchorPoses.Length; i < count; i++)
 			{
 				float gap = yBottom - _parentBottomPoses[i]; // 只能算比contentRtf的下边缘y坐标小的点
-				if (gap >= 0 && gap < minGap)
+				if (gap > 0 && gap < minGapBottom)
 				{
-					minGap = gap; 
+					minGapTop = gap; 
 					index = i; 
 				} 
 			}
@@ -304,10 +286,9 @@ public class ReuseView : MonoBehaviour
 		{
 			// 滑动后没有超过范围就不用变化parent的位置
 		}
-		Debug.LogError("index: " + index); 
 		if (index < 0 || index >= _parentAnchorPoses.Length)
 		{
-			Debug.LogError("index out of range: " + index); 
+//			Debug.LogError("index out of range: " + index); 
 			return; 
 		}
 		if (_curIndex == index)
@@ -315,7 +296,7 @@ public class ReuseView : MonoBehaviour
 			return; 
 		}
 		_curIndex = index; 
-		Debug.LogError("_curIndex: " + _curIndex); 
+//		Debug.LogError("_curIndex: " + _curIndex); 
 		_bottomItemEdgePos = _parentBottomPoses[index]; 
 		_topItemEdgePos = _parentAnchorPoses[index]; 
 
@@ -327,7 +308,6 @@ public class ReuseView : MonoBehaviour
 			item.Set(); 
 		}
 		_parentRtf.anchoredPosition = new Vector2(0, _parentAnchorPoses[index]); 
-		// 目前只关心用unity跳转过来的，不是在代码里面跳转
 	}
 
 	#endregion

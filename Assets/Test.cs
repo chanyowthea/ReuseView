@@ -12,7 +12,7 @@ public class Test : MonoBehaviour
 	void Start()
 	{
 		
-//		Set(); 
+		Set(); 
 	}
 
 	#region Main
@@ -20,7 +20,7 @@ public class Test : MonoBehaviour
 
 	void Set()
 	{
-		int count = 6; 
+		int count = 7; 
 		BaseItemVO[] vos = new BaseItemVO[count]; 
 		string[] ss = new string[4]{"中文测试", "中文测试中文测试中文测试", 
 			"中文测试中文测试中文测试中文测试中文测试中文测试", "中文测试中文测试中文测试中文测试中文测试中文测试中文测试中文测试中文测试"}; 

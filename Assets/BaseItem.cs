@@ -39,5 +39,9 @@ public class BaseItem : MonoBehaviour
 		_name = null; 
 	}
 
+	public float GetTextHeight()
+	{
+		return nameText.preferredHeight; 
+	}
 	#endregion
 }
